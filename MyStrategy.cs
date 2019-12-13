@@ -12,9 +12,6 @@ namespace AiCup2019
         int levelXLength = 40;
         int levelYLength = 40;
         double levelDiagonal = 4;
-        double playerMaxHorSpeed = 1;
-        double playerMaxJumpSpeed = 1;
-        double playerMaxJumpTime = 1;
         int playerMaxHealth = 20;
 
         int playerRadius = 6;
@@ -36,7 +33,7 @@ namespace AiCup2019
         readonly int findPathCD = 20;
         int currentFindPathCD = 0;
         PathNode lastPathNode;
-        Vec2Double lastTargetPosition;
+        Vec2Double? lastTargetPosition;
 
         static double DistanceSquare(Vec2Double a, Vec2Double b)
         {
@@ -84,10 +81,11 @@ namespace AiCup2019
                 if (radiusPosition.HasValue)
                     targetPosition = radiusPosition;
             }
-            else targetPosition = lastTargetPosition;
 
-            if (targetPosition.HasValue)
-                lastTargetPosition = targetPosition.Value;
+            if (!targetPosition.HasValue && lastTargetPosition.HasValue)
+                targetPosition = lastTargetPosition;
+            else if (targetPosition.HasValue)
+                lastTargetPosition = targetPosition;
             ///////////////////////////
 
             //PathFinding
@@ -209,12 +207,9 @@ namespace AiCup2019
             levelXLength = game.Level.Tiles.Length;
             levelYLength = game.Level.Tiles[0].Length;
             levelDiagonal = Math.Sqrt(levelXLength * levelXLength + levelYLength * levelYLength);
-            playerMaxHorSpeed = game.Properties.UnitMaxHorizontalSpeed;
-            playerMaxJumpSpeed = game.Properties.UnitJumpSpeed;
-            playerMaxJumpTime = game.Properties.UnitJumpTime;
             playerMaxHealth = game.Properties.UnitMaxHealth;
 
-            FindNextTarget(game.Units, unit);
+            //FindNextTarget(game.Units, unit);
 
             pathGraph = new PathGraph(game.Level.Tiles, unit.Size);
 
