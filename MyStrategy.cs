@@ -61,14 +61,17 @@ namespace AiCup2019
 
             //Find Target Position
             Vec2Double? targetPosition = null;
+            Vec2Double? targetUnitPosition = null;
+            if (targetUnit.HasValue)
+                targetUnitPosition = targetUnit.Value.Position;
 
-            if (unit.Health <= playerMaxHealth / 2)
+            if (unit.Health < playerMaxHealth)
             {
-                targetPosition = FindNearest(unit.Position, game, (LootBox lb) => { return lb.Item is Item.HealthPack; });
+                targetPosition = FindNearest(unit.Position, targetUnitPosition, game, (LootBox lb) => { return lb.Item is Item.HealthPack; }, debug);
             }
             else if (!unit.Weapon.HasValue)
             {
-                targetPosition = FindNearest(unit.Position, game, (LootBox lb) => { return lb.Item is Item.Weapon; });
+                targetPosition = FindNearest(unit.Position, targetUnitPosition, game, (LootBox lb) => { return lb.Item is Item.Weapon; }, debug);
             }
             
             if (!targetPosition.HasValue && targetUnit.HasValue)
@@ -77,7 +80,10 @@ namespace AiCup2019
                 if (DistanceSquare(unit.Position, targetPosition.Value) < 1d)
                     action.PlantMine = true;
 
-                Vec2Double? radiusPosition = FindNearestRadius(unit.Position, targetPosition.Value, unit.Weapon.Value.Typ == WeaponType.RocketLauncher ? playerBazookaRadius : playerRadius, game.Level.Tiles, debug);
+                Vec2Double? radiusPosition = null;
+                if (unit.Weapon.HasValue && unit.Weapon.Value.Typ == WeaponType.RocketLauncher)
+                    radiusPosition = FindNearestRadius(unit.Position, targetPosition.Value, playerBazookaRadius, game.Level.Tiles, debug);
+                else radiusPosition = FindNearestRadius(unit.Position, targetPosition.Value, playerRadius, game.Level.Tiles, debug);
                 if (radiusPosition.HasValue)
                     targetPosition = radiusPosition;
             }
@@ -162,7 +168,7 @@ namespace AiCup2019
 
             action.SwapWeapon = false;
             action.Reload = false;
-
+                                        //action.Shoot = false;
             return action;
         }
 
@@ -183,9 +189,13 @@ namespace AiCup2019
             currentFindPathCD = findPathCD;
         }
 
-        private Vec2Double? FindNearest(Vec2Double unitPosition, Game game, Predicate<LootBox> predicate)
+        private Vec2Double? FindNearest(Vec2Double unitPosition, Vec2Double? enemyPosition, Game game, Predicate<LootBox> predicate, Debug debug)
         {
             LootBox? lootBox = null;
+            LootBox? onMySide = null;
+            bool right = false;
+            if (enemyPosition.HasValue)
+                right = unitPosition.X - enemyPosition.Value.X < 0 ? false : true;
             foreach (LootBox lb in game.LootBoxes)
             {
                 if (predicate(lb))
@@ -194,10 +204,28 @@ namespace AiCup2019
                     {
                         lootBox = lb;
                     }
+
+                    bool lbRight = lb.Position.X - enemyPosition.Value.X < 0 ? false : true;
+                    if (right == lbRight) {
+                        if (!onMySide.HasValue || DistanceSquare(unitPosition, lb.Position) < DistanceSquare(unitPosition, onMySide.Value.Position))
+                        {
+                            if (right == lbRight)
+                            {
+                                onMySide = lb;
+                            }
+                        }
+                    }
                 }
             }
 
+            /*if (onMySide.HasValue)
+                debug.Draw(new CustomData.Rect(new Vec2Float((float)onMySide.Value.Position.X + 0.4f, (float)onMySide.Value.Position.Y + 0.4f), new Vec2Float(0.2f, 0.2f), new ColorFloat(0.0f, 0.9f, 0.0f, 0.9f)));
             if (lootBox.HasValue)
+                debug.Draw(new CustomData.Rect(new Vec2Float((float)lootBox.Value.Position.X + 0.4f, (float)lootBox.Value.Position.Y + 0.4f), new Vec2Float(0.2f, 0.2f), new ColorFloat(0.0f, 0.9f, 0.0f, 0.9f)));
+                */
+            if (onMySide.HasValue)
+                return onMySide.Value.Position;
+            else if (lootBox.HasValue)
                 return lootBox.Value.Position;
             else return null;
         }
@@ -312,10 +340,10 @@ namespace AiCup2019
             int currentY = 0;
             double currentDistance = double.MaxValue;
 
-            int startX = Math.Max(targetX - radius, 0);
-            int startY = Math.Max(targetY - radius, 0);
-            int finishX = Math.Min(targetX + radius, levelXLength);
-            int finishY = Math.Min(targetY + radius, levelYLength);
+            int startX = Math.Max(targetX - radius, 1);
+            int startY = Math.Max(targetY - radius, 1);
+            int finishX = Math.Min(targetX + radius, levelXLength - 1);
+            int finishY = Math.Min(targetY + radius, levelYLength - 1);
 
             for (int x = startX; x <= finishX; x++)
             {
@@ -324,7 +352,7 @@ namespace AiCup2019
                     if (Math.Abs(x - targetX) + Math.Abs(y - targetY) == radius)
                     {
                         Vec2Double tilePos = new Vec2Double(x + 0.5d, y + 0.5d);
-                        if ((currentX == 0 && currentY == 0) || (DistanceSquare(tilePos, unitPos) < currentDistance && CheckDirectSightLine(unitPos, targetPos, tiles, debug)))
+                        if (((currentX == 0 && currentY == 0) || DistanceSquare(tilePos, unitPos) < currentDistance) && CheckDirectSightLine(tilePos, targetPos, tiles, debug))
                         {
                             currentX = x;
                             currentY = y;
