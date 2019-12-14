@@ -57,7 +57,7 @@ namespace AiCup2019
             bool hasDirectSightLine = false;
             if (unit.Weapon.HasValue)
             {
-                hasDirectSightLine = CheckDirectSightLine(new Vec2Double(unit.Position.X, unit.Position.Y + unit.Size.Y / 2d), new Vec2Double(targetUnit.Value.Position.X, targetUnit.Value.Position.Y + targetUnit.Value.Size.Y / 2d), game.Level.Tiles, debug/*, true*/);
+                hasDirectSightLine = CheckDirectSightLine(new Vec2Double(unit.Position.X, unit.Position.Y + unit.Size.Y / 3d), new Vec2Double(targetUnit.Value.Position.X, targetUnit.Value.Position.Y + targetUnit.Value.Size.Y / 3d), game.Level.Tiles, debug/*, true*/);
                 //DrawSpread(unit, unit.Weapon.Value, debug, hasDirectSightLine);
             }
 
