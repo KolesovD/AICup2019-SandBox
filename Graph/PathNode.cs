@@ -20,12 +20,13 @@ namespace AiCup2019.Graph
 
         public int bigPathNodeDepth { get; private set; }
 
-        public float commandSpeed { get; private set; }
-        public bool commandJump { get; private set; }
-        public bool commandJumpDown { get; private set; }
+        public float commandSpeed { get; set; }
+        public bool commandJump { get; set; }
+        public bool commandJumpDown { get; set; }
+        public bool commandForceStop { get; set; }
 
         public PathNode(int x, int y, bool canStand, bool canFallDown, int jumpTicksLeft, int pathFromStart, int pathToFinish, int depth, int bigPathNodeDepth,
-            PathNode previousNode = null, float commandSpeed = 0f, bool commandJump = false, bool commandJumpDown = false)
+            PathNode previousNode = null, float commandSpeed = 0f, bool commandJump = false, bool commandJumpDown = false, bool commandForceStop = false)
         {
             X = x;
             Y = y;
@@ -40,6 +41,25 @@ namespace AiCup2019.Graph
             this.commandSpeed = commandSpeed;
             this.commandJump = commandJump;
             this.commandJumpDown = commandJumpDown;
+            this.commandForceStop = commandForceStop;
+        }
+
+        public PathNode(PathNode other)
+        {
+            X = other.X;
+            Y = other.Y;
+            canStand = other.canStand;
+            canFallDown = other.canFallDown;
+            jumpTicksLeft = other.jumpTicksLeft;
+            previousNode = other.previousNode;
+            pathFromStart = other.pathFromStart;
+            pathToFinish = other.pathToFinish;
+            depth = other.depth;
+            bigPathNodeDepth = other.bigPathNodeDepth;
+            commandSpeed = other.commandSpeed;
+            commandJump = other.commandJump;
+            commandJumpDown = other.commandJumpDown;
+            commandForceStop = other.commandForceStop;
         }
 
         public int CompareTo(object obj)
@@ -62,6 +82,7 @@ namespace AiCup2019.Graph
             commandSpeed = other.commandSpeed;
             commandJump = other.commandJump;
             commandJumpDown = other.commandJumpDown;
+            commandForceStop = other.commandForceStop;
         }
     }
 }

@@ -22,6 +22,8 @@ namespace AiCup2019
         //To remember
         int? nextTargetId;
         int currentNumberOfJumpTickLeft = 0;
+        bool mustFindAnotherWeapon = false;
+        bool lateGameMode = false;
 
         //Readonly const
         readonly ColorFloat transparentViolet = new ColorFloat(0.8f, 0, 0.8f, 0.2f);
@@ -65,19 +67,44 @@ namespace AiCup2019
             if (targetUnit.HasValue)
                 targetUnitPosition = targetUnit.Value.Position;
 
-            if (unit.Health < playerMaxHealth)
+            Vec2Double? healthPosition = null;
+            if (!lateGameMode)
             {
-                targetPosition = FindNearest(unit.Position, targetUnitPosition, game, (LootBox lb) => { return lb.Item is Item.HealthPack; }, debug);
+                healthPosition = FindNearest(unit.Position, targetUnitPosition, game, (LootBox lb) => { return lb.Item is Item.HealthPack; }, debug);
+                if (targetUnit.HasValue && healthPosition == null && unit.Health < targetUnit.Value.Health)
+                    lateGameMode = true;
+            }
+
+            if (!lateGameMode && unit.Health < playerMaxHealth)
+            {
+                targetPosition = healthPosition;
             }
             else if (!unit.Weapon.HasValue)
             {
                 targetPosition = FindNearest(unit.Position, targetUnitPosition, game, (LootBox lb) => { return lb.Item is Item.Weapon; }, debug);
             }
-            
+            else if (unit.Weapon.Value.Typ == WeaponType.AssaultRifle)
+            {
+                targetPosition = FindNearest(unit.Position, targetUnitPosition, game, (LootBox lb) => { return lb.Item is Item.Weapon ? (lb.Item as Item.Weapon).WeaponType == WeaponType.Pistol : false; }, debug);
+                mustFindAnotherWeapon = true;
+            }
+            else if (lateGameMode && unit.Weapon.Value.Typ != WeaponType.RocketLauncher)
+            {
+                targetPosition = FindNearest(unit.Position, targetUnitPosition, game, (LootBox lb) => { return lb.Item is Item.Weapon ? (lb.Item as Item.Weapon).WeaponType == WeaponType.RocketLauncher : false; }, debug);
+                mustFindAnotherWeapon = true;
+            }
+
+            action.SwapWeapon = false;
+            if (mustFindAnotherWeapon && targetPosition.HasValue && DistanceSquare(targetPosition.Value, unit.Position) < 0.09d)
+            {
+                action.SwapWeapon = true;
+                mustFindAnotherWeapon = false;
+            }
+
             if (!targetPosition.HasValue && targetUnit.HasValue)
             {
                 targetPosition = targetUnit.Value.Position;
-                if (DistanceSquare(unit.Position, targetPosition.Value) < 1d)
+                if (lateGameMode && DistanceSquare(unit.Position, targetPosition.Value) < 1.5d)
                     action.PlantMine = true;
 
                 Vec2Double? radiusPosition = null;
@@ -133,7 +160,9 @@ namespace AiCup2019
                 action.Jump = pn.commandJump;
                 action.JumpDown = pn.commandJumpDown;
                 currentNumberOfJumpTickLeft = pn.jumpTicksLeft;
-                //debug.Draw(new CustomData.Log("Depth: " + pn.depth + "  Velocity: " + action.Velocity + "  Jump: " + action.Jump + "  Down: " + action.JumpDown));
+                /*if (lastPathNode != null)
+                    pathGraph.DrawPathNode(lastPathNode, debug);
+                debug.Draw(new CustomData.Log("Depth: " + pn.depth + "  Velocity: " + action.Velocity + "  Jump: " + action.Jump + "  Down: " + action.JumpDown));*/
             }
             else if (!hasDirectSightLine && targetPosition.HasValue)
             {
@@ -166,9 +195,9 @@ namespace AiCup2019
             }
             else action.Shoot = false;
 
-            action.SwapWeapon = false;
             action.Reload = false;
                                         //action.Shoot = false;
+                                        //debug.Draw(new CustomData.Log("Jump Tickets Left: " + currentNumberOfJumpTickLeft));
             return action;
         }
 
@@ -182,6 +211,13 @@ namespace AiCup2019
                 pathNodes.Clear();
                 while (path != null && path.previousNode != null)
                 {
+                    if (path.commandForceStop)
+                    {
+                        PathNode subPath = new PathNode(path);
+                        subPath.commandSpeed = 0;
+                        subPath.commandJump = false;
+                        pathNodes.Push(subPath);
+                    }
                     pathNodes.Push(path);
                     path = path.previousNode;
                 }
@@ -270,15 +306,16 @@ namespace AiCup2019
                 int intStartXPos = (int)startXPos;
                 int intEndPos = (int)Math.Abs(deltaX);
 
-                for (int i = 0; (i < intEndPos) && (i < levelXLength - 1); i++)
+                for (int i = 0; (i <= intEndPos) && (i < levelXLength - 1); i++)
                 {
-                    int yTile = (int)(tang * (i + 0.99d + intStartXPos - startXPos)) + intStartYPos;
-                    if (debuging) debug.Draw(new CustomData.Rect(new Vec2Float(intStartXPos + i + 0.5f, yTile + 0.5f), new Vec2Float(0.5f, 0.5f), new ColorFloat(0.9f, 0.9f, 0.9f, 0.9f)));
+                    int yTile = (int)(tang * (i + 0.5d + intStartXPos - startXPos)) + intStartYPos;
                     if (tiles[intStartXPos + i][yTile] == Tile.Wall)
                     {
                         directSightLine = false;
-                        if (!debuging) break;
-                    }/*
+                        /*if (!debuging)*/ break;
+                    }
+                    if (debuging) debug.Draw(new CustomData.Rect(new Vec2Float(intStartXPos + i + 0.5f, yTile + 0.5f), new Vec2Float(0.5f, 0.5f), new ColorFloat(0.9f, 0.9f, 0.9f, 0.9f)));
+                    /*
 
                     yTile = (int)(tang * (i + 1.01d + intStartXPos - startXPos)) + intStartYPos;
                     if (debuging) debug.Draw(new CustomData.Rect(new Vec2Float(intStartXPos + i + 0.5f, yTile + 0.5f), new Vec2Float(0.5f, 0.5f), new ColorFloat(0.9f, 0.9f, 0.9f, 0.9f)));
@@ -308,15 +345,16 @@ namespace AiCup2019
                 int intStartYPos = (int)startYPos;
                 int intEndPos = (int)Math.Abs(deltaY);
 
-                for (int i = 0; (i < intEndPos) && (i < levelYLength - 1); i++)
+                for (int i = 0; (i <= intEndPos) && (i < levelYLength - 1); i++)
                 {
-                    int xTile = (int)((i + 0.99d + intStartYPos - startYPos) / tang) + intStartXPos;
-                    if (debuging) debug.Draw(new CustomData.Rect(new Vec2Float(xTile + 0.5f, intStartYPos + i + 0.5f), new Vec2Float(0.5f, 0.5f), new ColorFloat(0.9f, 0.9f, 0.9f, 0.9f)));
+                    int xTile = (int)((i + 0.5d + intStartYPos - startYPos) / tang) + intStartXPos;
                     if (tiles[xTile][intStartYPos + i] == Tile.Wall)
                     {
                         directSightLine = false;
-                        if (!debuging) break;
-                    }/*
+                        /*if (!debuging)*/ break;
+                    }
+                    if (debuging) debug.Draw(new CustomData.Rect(new Vec2Float(xTile + 0.5f, intStartYPos + i + 0.5f), new Vec2Float(0.5f, 0.5f), new ColorFloat(0.9f, 0.9f, 0.9f, 0.9f)));
+                    /*
 
                     xTile = (int)((i + 1.01d + intStartYPos - startYPos) / tang) + intStartXPos;
                     if (debuging) debug.Draw(new CustomData.Rect(new Vec2Float(xTile + 0.5f, intStartYPos + i + 0.5f), new Vec2Float(0.5f, 0.5f), new ColorFloat(0.9f, 0.9f, 0.9f, 0.9f)));
@@ -343,16 +381,16 @@ namespace AiCup2019
             int startX = Math.Max(targetX - radius, 1);
             int startY = Math.Max(targetY - radius, 1);
             int finishX = Math.Min(targetX + radius, levelXLength - 1);
-            int finishY = Math.Min(targetY + radius, levelYLength - 1);
+            int finishY = Math.Min(targetY + radius, levelYLength - 2);
 
             for (int x = startX; x <= finishX; x++)
             {
                 for (int y = startY; y <= finishY; y++)
                 {
-                    if (Math.Abs(x - targetX) + Math.Abs(y - targetY) == radius)
+                    if ((Math.Abs(x - targetX) + Math.Abs(y - targetY) == radius) && tiles[x][y] != Tile.Wall && tiles[x][y + 1] != Tile.Wall)
                     {
                         Vec2Double tilePos = new Vec2Double(x + 0.5d, y + 0.5d);
-                        if (((currentX == 0 && currentY == 0) || DistanceSquare(tilePos, unitPos) < currentDistance) && CheckDirectSightLine(tilePos, targetPos, tiles, debug))
+                        if (CheckDirectSightLine(tilePos, targetPos, tiles, debug) && ((currentX == 0 && currentY == 0) || DistanceSquare(tilePos, unitPos) < currentDistance))
                         {
                             currentX = x;
                             currentY = y;
@@ -361,6 +399,23 @@ namespace AiCup2019
                     }
                 }
             }
+
+            /*for (int x = startX; x <= finishX; x++)
+            {
+                for (int y = startY; y <= finishY; y++)
+                {
+                    if (Math.Abs(x - targetX) + Math.Abs(y - targetY) == radius)
+                    {
+                        if (x == currentX && y == currentY)
+                        {
+                            debug.Draw(new CustomData.Rect(new Vec2Float(x + 0.4f, y + 0.4f), new Vec2Float(0.2f, 0.2f), new ColorFloat(0.0f, 0.9f, 0.0f, 0.9f)));
+                            bool directLine = CheckDirectSightLine(new Vec2Double(x + 0.5d, y + 0.5d), targetPos, tiles, debug, true);
+                            debug.Draw(new CustomData.Log("Is seen from dot: " + directLine));
+                        }
+                        else debug.Draw(new CustomData.Rect(new Vec2Float(x + 0.4f, y + 0.4f), new Vec2Float(0.2f, 0.2f), new ColorFloat(0.9f, 0.0f, 0.0f, 0.9f)));
+                    }
+                }
+            }*/
 
             if (currentX == 0 && currentY == 0)
                 return null;

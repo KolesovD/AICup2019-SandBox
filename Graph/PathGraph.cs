@@ -27,6 +27,7 @@ namespace AiCup2019.Graph
         private Vec2Double previousTargetPosition;
 
         private Vec2Double unitSize;
+        double unitHalfSizeX;
 
         public PathGraph(Tile[][] tiles, Vec2Double unitSize)
         {
@@ -34,6 +35,7 @@ namespace AiCup2019.Graph
             levelYLength = tiles[0].Length;
 
             this.unitSize = unitSize;
+            unitHalfSizeX = unitSize.X / 2d + 0.05d;
 
             nodeMap = new BigNode[levelXLength, levelYLength];
 
@@ -343,14 +345,21 @@ namespace AiCup2019.Graph
         {
             int nodeX = (int)(x / 6d);
             int nodeY = (int)(y / 6d);
+            bool commandForceStop = false;
             bool nodeCanStand = false;
-            if (nodeMap[nodeX, nodeY].canStand || (nodeMap[nodeX, nodeY].isGrounded && (y % 6 == 0)))
+            if (nodeMap[nodeX, nodeY].canStand)
                 nodeCanStand = true;
+            else if (nodeMap[nodeX, nodeY].isGrounded && (y % 6 == 0))
+            {
+                nodeCanStand = true;
+                if (commandJump)
+                    commandForceStop = true;
+            }
             bool nodeCanFallDown = false;
             if (nodeMap[nodeX, nodeY].canFallDown || (y % 6 != 0))
                 nodeCanFallDown = true;
             int nodeJumpTicksLeft;
-            if (nodeCanStand)
+            if (nodeCanStand && previousNode != null)
                 nodeJumpTicksLeft = ticksForJump;
             else nodeJumpTicksLeft = jumpTicksLeft;
 
@@ -366,7 +375,7 @@ namespace AiCup2019.Graph
 
             return new PathNode(x, y, nodeCanStand, nodeCanFallDown, nodeJumpTicksLeft, previousNode == null ? 0 : previousNode.pathFromStart + deltaPath,
                 Math.Abs(finishX - x) * 10 + Math.Abs(finishY - y) * 10, previousNode == null ? 0 : previousNode.depth + 1, currentBigPathDepth, previousNode,
-                commandSpeed, commandJump, commandJumpDown);
+                commandSpeed, commandJump, commandJumpDown, commandForceStop);
         }
 
         private PathNode AddNeighbors(PathNode node, List<PathNode> openNodes, List<PathNode> closedNodes, int finishX, int finishY)
@@ -380,9 +389,7 @@ namespace AiCup2019.Graph
 
             int subFinishX = node.bigPathNodeDepth >= pathMaxDepth ? finishX : bigPath[node.bigPathNodeDepth + 1].X * 6 + 3;
             int subFinishY = node.bigPathNodeDepth >= pathMaxDepth ? finishY : bigPath[node.bigPathNodeDepth + 1].Y * 6 + 3;
-
-            double unitHalfSizeX = unitSize.X / 2d;
-
+            
             List<PathNode> tempPathNodes = new List<PathNode>();
 
             int nextY;
@@ -395,7 +402,7 @@ namespace AiCup2019.Graph
                     //rightTop
                     if (nodeY != (levelYLength * 6) - 1)
                         if ((node.canStand || node.jumpTicksLeft > 0) && nodeMap[(int)(nextX / 6d), (int)(nextY / 6d)].canMoveThrough)
-                            tempPathNodes.Add(CreateNodeFromCoordinates(nextX, nextY, subFinishX, subFinishY, node, diagonalCost, node.canStand ? ticksForJump - 1 : node.jumpTicksLeft - 1,
+                            tempPathNodes.Add(CreateNodeFromCoordinates(nextX, nextY, subFinishX, subFinishY, node, diagonalCost, /*(node.canStand && !node.commandJump) ? ticksForJump - 1 :*/ node.jumpTicksLeft - 1,
                                 maxSpeed, true, false));
 
                     nextY = nodeY;
@@ -414,16 +421,18 @@ namespace AiCup2019.Graph
             nextX = nodeX;
             nextY = nodeY + 1;
             //top
-            if (nodeY != (levelYLength * 6) - 1)
-                if ((node.canStand || node.jumpTicksLeft > 0) && nodeMap[(int)(nextX / 6d), (int)(nextY / 6d)].canMoveThrough)
-                    tempPathNodes.Add(CreateNodeFromCoordinates(nextX, nextY, subFinishX, subFinishY, node, hvCost, node.canStand ? ticksForJump - 1 : node.jumpTicksLeft - 1,
-                        0f, true, false));
+            if (nodeMap[(int)((nextX / 6d) + unitHalfSizeX), (int)(nextY / 6d)].canMoveThrough && nodeMap[(int)((nextX / 6d) - unitHalfSizeX), (int)(nextY / 6d)].canMoveThrough)
+                if (nodeY != (levelYLength * 6) - 1)
+                    if ((node.canStand || node.jumpTicksLeft > 0) && nodeMap[(int)(nextX / 6d), (int)(nextY / 6d)].canMoveThrough)
+                        tempPathNodes.Add(CreateNodeFromCoordinates(nextX, nextY, subFinishX, subFinishY, node, hvCost, /*(node.canStand && !node.commandJump) ? ticksForJump - 1 :*/ node.jumpTicksLeft - 1,
+                            0f, true, false));
 
             nextY = nodeY - 1;
             //bottom
-            if (nodeY != 0)
-                if (node.canFallDown && nodeMap[(int)(nextX / 6d), (int)(nextY / 6d)].canMoveThrough)
-                    tempPathNodes.Add(CreateNodeFromCoordinates(nextX, nextY, subFinishX, subFinishY, node, hvCost, 0, 0f, false, true));
+            if (nodeMap[(int)((nextX / 6d) + unitHalfSizeX), (int)(nextY / 6d)].canMoveThrough && nodeMap[(int)((nextX / 6d) - unitHalfSizeX), (int)(nextY / 6d)].canMoveThrough)
+                if (nodeY != 0)
+                    if (node.canFallDown && nodeMap[(int)(nextX / 6d), (int)(nextY / 6d)].canMoveThrough)
+                        tempPathNodes.Add(CreateNodeFromCoordinates(nextX, nextY, subFinishX, subFinishY, node, hvCost, 0, 0f, false, true));
 
             nextX = nodeX - 1;
             if (nodeX != 0)
@@ -434,7 +443,7 @@ namespace AiCup2019.Graph
                     //leftTop
                     if (nodeY != (levelYLength * 6) - 1)
                         if ((node.canStand || node.jumpTicksLeft > 0) && nodeMap[(int)(nextX / 6d), (int)(nextY / 6d)].canMoveThrough)
-                            tempPathNodes.Add(CreateNodeFromCoordinates(nextX, nextY, subFinishX, subFinishY, node, diagonalCost, node.canStand ? ticksForJump - 1 : node.jumpTicksLeft - 1, 
+                            tempPathNodes.Add(CreateNodeFromCoordinates(nextX, nextY, subFinishX, subFinishY, node, diagonalCost, /*(node.canStand && !node.commandJump) ? ticksForJump - 1 :*/ node.jumpTicksLeft - 1, 
                                 -maxSpeed, true, false));
 
                     nextY = nodeY;
